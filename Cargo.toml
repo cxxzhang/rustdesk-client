@@ -292,3 +292,12 @@ rpath = true
 
 [profile.dev]
 debug = 1
+
+# sciter-rs turns sciter's bit-flag values into enums with `transmute` (e.g.
+# SW_MAIN|SW_RESIZEABLE = 0x84, which has no declared variant). rustc inserts a
+# debug-only enum validity check on such transmutes and aborts:
+#   "trying to construct an enum from an invalid value 0x84"
+# Upstream pins Rust 1.75 for the Sciter build; on a current toolchain the check
+# has to be off for this crate. Release builds already default it off.
+[profile.dev.package.sciter-rs]
+debug-assertions = false

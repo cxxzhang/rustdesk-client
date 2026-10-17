@@ -1,0 +1,103 @@
+# HarmonyOS / OpenHarmony build — the one addition to upstream's CI.
+#
+# Upstream RustDesk has no OHOS support at all, so this does not build this
+# repository. It builds liyan-lucky's separate ArkTS app
+# (github.com/liyan-lucky/rustdesk_harmonyos), which links a prebuilt
+# librustdesk_core.a rather than compiling the Rust core here.
+#
+# Everything else in this repo's CI is upstream's, unmodified:
+#   flutter-ci.yml     -> flutter-build.yml  (all desktop/mobile platforms)
+#   flutter-tag.yml    -> the same, on a version tag
+#   bridge.yml         -> the Rust<->Dart bridge, consumed by the above
+#
+# The SDK is 2.3 GB, over GitHub's 2 GiB release-asset limit, so it lives in a
+# GitCode repo split into 99 MB volumes and is reassembled here. Its toolchain
+# binaries are ELF, so this is Linux-runner-only by nature.
+name: harmonyos
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['.github/workflows/harmonyos.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: harmonyos (arm64-v8a)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: '17' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: System tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq unzip zip p7zip-full curl jq python3 rsync
+      - name: Clone the HarmonyOS app
+        run: |
+          git clone --depth 1 https://github.com/liyan-lucky/rustdesk_harmonyos.git src/harmonyos
+          git -C src/harmonyos log --oneline -1
+      - name: Install HarmonyOS SDK
+        env:
+          SDK_REPO: https://gitcode.com/rustzhang/harmonyos-sdk.git
+        run: |
+          set -euo pipefail
+          SDK_BASE="$HOME/harmonyos-sdk"
+          rm -rf "$SDK_BASE" "$RUNNER_TEMP/sdkx"
+          mkdir -p "$SDK_BASE" "$RUNNER_TEMP/sdkx"
+          git clone --depth 1 "$SDK_REPO" "$RUNNER_TEMP/sdkvol"
+          cd "$RUNNER_TEMP/sdkvol"
+          cat part-* > "$RUNNER_TEMP/sdk.zip"
+          echo "reassembled: $(stat -c%s "$RUNNER_TEMP/sdk.zip") bytes"
+          unzip -q "$RUNNER_TEMP/sdk.zip" -d "$RUNNER_TEMP/sdkx"
+          echo "archive top level:"; find "$RUNNER_TEMP/sdkx" -maxdepth 2 -type d | head -20
+          # Top level is command-line-tools/ holding bin/ ohpm/ hvigor/ tool/
+          # and sdk/. Take the directory that contains bin/.
+          CAND="$(find "$RUNNER_TEMP/sdkx" -maxdepth 3 -type d -name bin -print -quit)"
+          [ -n "$CAND" ] || { echo "no bin/ in the archive" >&2; find "$RUNNER_TEMP/sdkx" -maxdepth 3 -type d >&2; exit 1; }
+          ROOT="$(dirname "$CAND")"
+          echo "tools root: $ROOT"
+          cp -r "$ROOT"/. "$SDK_BASE"/
+          chmod +x "$SDK_BASE"/openharmony/native/build-tools/cmake/bin/* 2>/dev/null || true
+          chmod +x "$SDK_BASE"/openharmony/native/llvm/bin/* 2>/dev/null || true
+          chmod +x "$SDK_BASE"/hms/native/build-tools/cmake/bin/* 2>/dev/null || true
+          chmod +x "$SDK_BASE"/hms/native/llvm/bin/* 2>/dev/null || true
+          chmod +x "$SDK_BASE"/sdk/*/openharmony/native/llvm/bin/* 2>/dev/null || true
+          SDK_HOME="$SDK_BASE/sdk"
+          [ -d "$SDK_BASE/sdk/default/openharmony" ] && SDK_HOME="$SDK_BASE/sdk/default"
+          echo "SDK_HOME=$SDK_HOME"; ls -la "$SDK_HOME" 2>/dev/null | head
+          {
+            echo "DEVECO_SDK_HOME=$SDK_HOME"
+            echo "OHOS_HVIGOR_SDK_ROOT=$SDK_HOME"
+            echo "DEVECO_TOOLS_HOME=$SDK_BASE"
+            echo "DEVECO_NODE_EXE=$(command -v node)"
+          } >> "$GITHUB_ENV"
+          echo "$SDK_BASE/bin" >> "$GITHUB_PATH"
+          echo "$SDK_BASE/ohpm/bin" >> "$GITHUB_PATH"
+          echo "$SDK_BASE/hvigor/bin" >> "$GITHUB_PATH"
+          echo "$SDK_HOME/openharmony/native/llvm/bin" >> "$GITHUB_PATH"
+      - name: Build HAP
+        working-directory: src/harmonyos
+        env:
+          HARMONY_ARTIFACTS_DIR: ${{ runner.temp }}/harmonyos-artifacts
+        run: |
+          mkdir -p "$HARMONY_ARTIFACTS_DIR"
+          chmod +x scripts/github_build_harmonyos_linux.sh
+          scripts/github_build_harmonyos_linux.sh \
+            --artifact-type hap \
+            --version-bump none \
+            --artifacts-dir "$HARMONY_ARTIFACTS_DIR" \
+            --abi-filter arm64-v8a \
+            --skip-package-verify
+      - name: Collect
+        run: |
+          mkdir -p dist
+          find src/harmonyos "$HARMONY_ARTIFACTS_DIR" -type f -name '*.hap' \
+            -exec cp {} dist/ \; 2>/dev/null || true
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-client-harmonyos
+          path: dist/
+          if-no-files-found: warn
