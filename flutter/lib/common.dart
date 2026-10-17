@@ -19,7 +19,6 @@ import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:get/get_rx/src/rx_workers/utils/debouncer.dart';
 import 'package:provider/provider.dart';
 import 'package:uni_links/uni_links.dart';
@@ -4316,15 +4315,17 @@ Future<String?> buildWebShareLink() async {
   final pw = await bind.mainGetTemporaryPassword();
   final root = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
   try {
-    final resp = await http
-        .post(Uri.parse('$root/share'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'peer': id,
-              if (key.isNotEmpty) 'key': key,
-              if (pw.isNotEmpty) 'pw': pw,
-            }))
-        .timeout(const Duration(seconds: 8));
+    // The project's own client, not package:http directly: on desktop it goes
+    // through the Rust HTTP stack, so a proxy configured in the app applies.
+    final resp = await http.HttpService().sendRequest(
+      Uri.parse('$root/share'),
+      http.HttpMethod.post,
+      body: jsonEncode({
+        'peer': id,
+        if (key.isNotEmpty) 'key': key,
+        if (pw.isNotEmpty) 'pw': pw,
+      }),
+    );
     if (resp.statusCode == 200) {
       final j = jsonDecode(resp.body);
       if (j is Map && j['url'] is String) return j['url'] as String;
