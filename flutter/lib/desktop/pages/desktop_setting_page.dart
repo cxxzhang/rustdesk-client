@@ -1808,6 +1808,39 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
     ]).marginOnly(bottom: _kListViewBottomMargin);
   }
 
+  void _showWebShareUrlDialog(BuildContext context) {
+    final ctrl = TextEditingController(
+        text: bind.mainGetOptionSync(key: kOptionWebShareUrl));
+    gFFI.dialogManager.show((setState, close, context) {
+      return CustomAlertDialog(
+        title: Text(translate('Web share URL')),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 420),
+          child: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'https://rd.example.com',
+              helperText: 'Empty hides the share button on the home page.',
+            ),
+          ),
+        ),
+        actions: [
+          _Button('Cancel', () => close()),
+          _Button('OK', () {
+            var v = ctrl.text.trim();
+            while (v.endsWith('/')) {
+              v = v.substring(0, v.length - 1);
+            }
+            bind.mainSetOption(key: kOptionWebShareUrl, value: v);
+            setState(() {});
+            close();
+          }),
+        ],
+      );
+    });
+  }
+
   Widget network(BuildContext context) {
     final hideServer =
         bind.mainGetBuildinOption(key: kOptionHideServerSetting) == 'Y';
@@ -1917,6 +1950,18 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                   title: 'Socks5/Http(s) Proxy',
                   onTap: changeSocks5Proxy,
                 ),
+              divider,
+              // Base URL of a browser client; when set, the home page offers a
+              // button that copies a share link for this device.
+              listTile(
+                icon: Icons.link_outlined,
+                title: 'Web share URL',
+                showTooltip: true,
+                tooltipMessage:
+                    'Base URL of your browser client, e.g. https://rd.example.com. '
+                    'Leave empty to hide the share button.',
+                onTap: () => _showWebShareUrlDialog(context),
+              ),
               if (!hideWebSocket && (!hideServer || !hideProxy)) divider,
               if (!hideWebSocket)
                 switchWidget(
