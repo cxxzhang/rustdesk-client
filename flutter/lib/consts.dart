@@ -99,6 +99,9 @@ const String kOptionIdWhitelist = "id-whitelist";
 const String kOptionEnableAbr = "enable-abr";
 const String kOptionEnableRecordSession = "enable-record-session";
 const String kOptionDirectServer = "direct-server";
+/// Base URL of a browser client that serves /share links (no trailing slash),
+/// e.g. "https://rd.example.com". Empty hides the share action.
+const String kOptionWebShareUrl = "web-share-url";
 const String kOptionDirectAccessPort = "direct-access-port";
 const String kOptionAllowAutoDisconnect = "allow-auto-disconnect";
 const String kOptionAutoDisconnectTimeout = "auto-disconnect-timeout";
