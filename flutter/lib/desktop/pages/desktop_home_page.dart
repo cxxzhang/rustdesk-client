@@ -220,7 +220,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                                   ?.color
                                   ?.withOpacity(0.5)),
                         ).marginOnly(top: 5),
-                        buildPopupMenu(context)
+                        Row(
+                          children: [
+                            buildShareButton(context),
+                            buildPopupMenu(context),
+                          ],
+                        )
                       ],
                     ),
                   ),
@@ -251,6 +256,42 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         ],
       ),
     );
+  }
+
+  /// Copies a browser share link when the operator configured one
+  /// (`web-share-url`). Hidden otherwise, so an unconfigured install shows no
+  /// button that would only fail.
+  Widget buildShareButton(BuildContext context) {
+    if (bind.mainGetOptionSync(key: kOptionWebShareUrl).trim().isEmpty) {
+      return Offstage();
+    }
+    final textColor = Theme.of(context).textTheme.titleLarge?.color;
+    RxBool hover = false.obs;
+    return InkWell(
+      onTap: () async {
+        final link = await buildWebShareLink();
+        if (link == null) return;
+        await Clipboard.setData(ClipboardData(text: link));
+        showToast(translate('Copied'));
+      },
+      child: Tooltip(
+        message: translate('Copy a link that opens this device in a browser'),
+        child: Obx(
+          () => CircleAvatar(
+            radius: 15,
+            backgroundColor: hover.value
+                ? Theme.of(context).scaffoldBackgroundColor
+                : Theme.of(context).colorScheme.background,
+            child: Icon(
+              Icons.link_outlined,
+              size: 20,
+              color: hover.value ? textColor : textColor?.withOpacity(0.5),
+            ),
+          ),
+        ),
+      ),
+      onHover: (value) => hover.value = value,
+    ).marginOnly(right: 6);
   }
 
   Widget buildPopupMenu(BuildContext context) {
