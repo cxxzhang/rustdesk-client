@@ -52,11 +52,13 @@ jobs:
           echo "reassembled: $(stat -c%s "$RUNNER_TEMP/sdk.zip") bytes"
           unzip -q "$RUNNER_TEMP/sdk.zip" -d "$RUNNER_TEMP/sdkx"
           echo "archive top level:"; find "$RUNNER_TEMP/sdkx" -maxdepth 2 -type d | head -20
-          # Top level is command-line-tools/ holding bin/ ohpm/ hvigor/ tool/
-          # and sdk/. Take the directory that contains bin/.
-          CAND="$(find "$RUNNER_TEMP/sdkx" -maxdepth 3 -type d -name bin -print -quit)"
-          [ -n "$CAND" ] || { echo "no bin/ in the archive" >&2; find "$RUNNER_TEMP/sdkx" -maxdepth 3 -type d >&2; exit 1; }
-          ROOT="$(dirname "$CAND")"
+          # Top level is command-line-tools/, which holds bin/ ohpm/ hvigor/
+          # tool/ and sdk/. Take it explicitly: searching for a directory named
+          # bin also matches hvigor/bin, and picking that as the root gives a
+          # tree with no sdk/ in it.
+          ROOT="$(find "$RUNNER_TEMP/sdkx" -maxdepth 2 -type d -name command-line-tools -print -quit)"
+          [ -n "$ROOT" ] || { echo "command-line-tools/ not found" >&2; find "$RUNNER_TEMP/sdkx" -maxdepth 3 -type d >&2; exit 1; }
+          [ -d "$ROOT/bin" ] && [ -d "$ROOT/sdk" ] || { echo "unexpected layout under $ROOT" >&2; ls -la "$ROOT" >&2; exit 1; }
           echo "tools root: $ROOT"
           cp -r "$ROOT"/. "$SDK_BASE"/
           chmod +x "$SDK_BASE"/openharmony/native/build-tools/cmake/bin/* 2>/dev/null || true
