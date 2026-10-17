@@ -107,13 +107,17 @@ jobs:
             --abi-filter arm64-v8a \
             --skip-package-verify
       - name: Collect
+        env:
+          # Set here too: HARMONY_ARTIFACTS_DIR was scoped to the Build step,
+          # so this step saw an empty path and copied nothing.
+          HARMONY_ARTIFACTS_DIR: ${{ runner.temp }}/harmonyos-artifacts
         run: |
           mkdir -p dist
-          find src/harmonyos "$HARMONY_ARTIFACTS_DIR" -type f -name '*.hap' \
-            -exec cp {} dist/ \; 2>/dev/null || true
+          find "$HARMONY_ARTIFACTS_DIR" -type f -name '*.hap' -exec cp {} dist/ \;
           ls -la dist
+          test -n "$(ls -A dist)" || { echo "no .hap produced" >&2; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: rustdesk-client-harmonyos
           path: dist/
-          if-no-files-found: warn
+          if-no-files-found: error
