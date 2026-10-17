@@ -79,6 +79,17 @@ jobs:
           echo "$SDK_BASE/ohpm/bin" >> "$GITHUB_PATH"
           echo "$SDK_BASE/hvigor/bin" >> "$GITHUB_PATH"
           echo "$SDK_HOME/openharmony/native/llvm/bin" >> "$GITHUB_PATH"
+      - name: Point the app at the SDK we have
+        working-directory: src/harmonyos
+        run: |
+          # The app targets HarmonyOS 6.1.1 (API 24); the only freely
+          # downloadable command-line SDK is 26.0.0 (API 26), and hvigor
+          # refuses to build when they disagree ("Please modify
+          # compileSdkVersion to 26.0.0"). Bump the project to match.
+          sed -i 's/"compileSdkVersion": "6.1.1(24)"/"compileSdkVersion": "26.0.0(26)"/' build-profile.json5
+          sed -i 's/"targetSdkVersion": "6.1.1(24)"/"targetSdkVersion": "26.0.0(26)"/' build-profile.json5
+          grep -n 'SdkVersion' build-profile.json5
+
       - name: Build HAP
         working-directory: src/harmonyos
         env:
