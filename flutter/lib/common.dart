@@ -4292,18 +4292,27 @@ Widget? buildAvatarWidget({
 ///
 /// The base URL is the operator-supplied `web-share-url` (our web client); the
 /// page it points at mints a signed, time-limited `/s/<token>` link. We pass
-/// the id and the server key so the visitor needs neither, and deliberately
-/// NOT the password: a URL ends up in chat logs and browser history, and a
-/// password would outlive the link's expiry. The visitor is asked for it.
+/// the id and the server key so the visitor needs neither.
+///
+/// The password we put in the link is the **temporary** one, never the
+/// permanent one. That is what makes a passwordless link safe: rustdesk
+/// rotates the temporary password after every successful login
+/// (`connection.rs`, right after the peer is authorized), so a link in a chat
+/// log stops working the moment it has been used once, and it also dies with
+/// the token's expiry. The permanent password would outlive both. When the
+/// machine is configured to accept only the permanent password, the temporary
+/// one is empty and the visitor is prompted as before — the honest fallback.
 Future<String?> buildWebShareLink() async {
   final base = bind.mainGetOptionSync(key: kOptionWebShareUrl).trim();
   if (base.isEmpty) return null;
   final id = await bind.mainGetMyId();
   if (id.isEmpty) return null;
   final key = bind.mainGetOptionSync(key: 'key');
+  final pw = await bind.mainGetTemporaryPassword();
   final root = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
   final q = <String>['peer=$id'];
   if (key.isNotEmpty) q.add('key=${Uri.encodeComponent(key)}');
+  if (pw.isNotEmpty) q.add('pw=${Uri.encodeComponent(pw)}');
   // The page itself is the client; /share is what mints the token.
   return '$root/share?${q.join('&')}';
 }
