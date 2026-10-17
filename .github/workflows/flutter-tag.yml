@@ -17,3 +17,11 @@ jobs:
       upload-artifact: true
       upload-tag: ${{ github.ref_name }}
       publish-update-metadata: ${{ github.repository == 'rustdesk/rustdesk' }}
+
+  # HarmonyOS is the one platform upstream does not build. It runs in parallel
+  # with the tag build and attaches its .hap to the same release.
+  harmonyos:
+    uses: ./.github/workflows/harmonyos.yml
+    secrets: inherit
+    with:
+      upload-tag: ${{ github.ref_name }}
