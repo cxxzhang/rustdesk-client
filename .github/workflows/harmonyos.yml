@@ -20,6 +20,14 @@ on:
     branches: [main, master]
     paths: ['.github/workflows/harmonyos.yml']
   workflow_dispatch:
+  # Called by flutter-tag.yml so a tagged release carries the HAP alongside the
+  # other platforms' installers.
+  workflow_call:
+    inputs:
+      upload-tag:
+        type: string
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -121,3 +129,12 @@ jobs:
           name: rustdesk-client-harmonyos
           path: dist/
           if-no-files-found: error
+
+      - name: Attach to the release
+        if: inputs.upload-tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.upload-tag }}
+          prerelease: true
+          fail_on_unmatched_files: true
+          files: dist/*.hap
