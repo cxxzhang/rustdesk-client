@@ -86,8 +86,11 @@ jobs:
           # downloadable command-line SDK is 26.0.0 (API 26), and hvigor
           # refuses to build when they disagree ("Please modify
           # compileSdkVersion to 26.0.0"). Bump the project to match.
-          sed -i 's/"compileSdkVersion": "6.1.1(24)"/"compileSdkVersion": "26.0.0(26)"/' build-profile.json5
-          sed -i 's/"targetSdkVersion": "6.1.1(24)"/"targetSdkVersion": "26.0.0(26)"/' build-profile.json5
+          # Plain "26.0.0", not "26.0.0(26)": hvigor rejects the parenthesised
+          # form here with "api version parameter is illegal".
+          sed -i 's/"compileSdkVersion": "6.1.1(24)"/"compileSdkVersion": "26.0.0"/' build-profile.json5
+          sed -i 's/"targetSdkVersion": "6.1.1(24)"/"targetSdkVersion": "26.0.0"/' build-profile.json5
+          sed -i 's/"compatibleSdkVersion": "6.1.0(23)"/"compatibleSdkVersion": "26.0.0"/' build-profile.json5
           grep -n 'SdkVersion' build-profile.json5
 
       - name: Build HAP
