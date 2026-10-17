@@ -19,6 +19,7 @@ import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:get/get_rx/src/rx_workers/utils/debouncer.dart';
 import 'package:provider/provider.dart';
 import 'package:uni_links/uni_links.dart';
@@ -4287,21 +4288,25 @@ Widget? buildAvatarWidget({
   );
 }
 
-/// Build a browser share link for this device, or null when sharing is not
-/// configured.
+/// Ask the web layer for a share link, or null when sharing is not configured.
 ///
-/// The base URL is the operator-supplied `web-share-url` (our web client); the
-/// page it points at mints a signed, time-limited `/s/<token>` link. We pass
-/// the id and the server key so the visitor needs neither.
+/// The base URL is the operator-supplied `web-share-url`; its `/share`
+/// endpoint mints a token that pins the device, the server key and the
+/// password, and expires.
 ///
-/// The password we put in the link is the **temporary** one, never the
-/// permanent one. That is what makes a passwordless link safe: rustdesk
-/// rotates the temporary password after every successful login
-/// (`connection.rs`, right after the peer is authorized), so a link in a chat
-/// log stops working the moment it has been used once, and it also dies with
-/// the token's expiry. The permanent password would outlive both. When the
-/// machine is configured to accept only the permanent password, the temporary
-/// one is empty and the visitor is prompted as before — the honest fallback.
+/// The password we send is the **temporary** one, never the permanent one.
+/// That is what makes a passwordless link safe: rustdesk rotates the
+/// temporary password after every successful login (`connection.rs`, right
+/// after the peer is authorized), so a link pasted into a chat stops working
+/// the moment it has been used once, and it dies with the token's expiry
+/// regardless. The permanent password would outlive both. When the machine
+/// accepts only the permanent password the temporary one is empty, the link
+/// carries no password, and the visitor is prompted as before.
+///
+/// It goes in a POST body, not the query string: the URL is what ends up in
+/// the clipboard, the chat log and the web server's access log, and none of
+/// those should contain a credential. The link we hand back is the opaque
+/// `/s/<token>`.
 Future<String?> buildWebShareLink() async {
   final base = bind.mainGetOptionSync(key: kOptionWebShareUrl).trim();
   if (base.isEmpty) return null;
@@ -4310,9 +4315,25 @@ Future<String?> buildWebShareLink() async {
   final key = bind.mainGetOptionSync(key: 'key');
   final pw = await bind.mainGetTemporaryPassword();
   final root = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-  final q = <String>['peer=$id'];
+  try {
+    final resp = await http
+        .post(Uri.parse('$root/share'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'peer': id,
+              if (key.isNotEmpty) 'key': key,
+              if (pw.isNotEmpty) 'pw': pw,
+            }))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode == 200) {
+      final j = jsonDecode(resp.body);
+      if (j is Map && j['url'] is String) return j['url'] as String;
+    }
+  } catch (_) {
+    // Fall through: a link the visitor has to unlock is still worth having,
+    // and it keeps the password out of every URL either way.
+  }
+  final q = <String>['peer=${Uri.encodeComponent(id)}'];
   if (key.isNotEmpty) q.add('key=${Uri.encodeComponent(key)}');
-  if (pw.isNotEmpty) q.add('pw=${Uri.encodeComponent(pw)}');
-  // The page itself is the client; /share is what mints the token.
   return '$root/share?${q.join('&')}';
 }
